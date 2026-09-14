@@ -1,0 +1,13 @@
+{
+  "name": "studentcontrol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/start-all.js",
+    "start:backend": "npm.cmd --prefix backend run dev",
+    "start:frontend": "npm.cmd --prefix frontend run dev -- --host 127.0.0.1 --port 5173",
+    "build": "npm.cmd --prefix frontend run build",
+    "check:backend": "node --check backend/server.js"
+  }
+}
