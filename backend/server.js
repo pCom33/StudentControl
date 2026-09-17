@@ -236,7 +236,7 @@ app.get('/api/alunos', authMiddleware, async (req, res, next) => {
        LEFT JOIN aluno_encarregado ae ON ae.aluno_id = a.id
        LEFT JOIN encarregados e ON e.id = ae.encarregado_id
        WHERE a.nome LIKE :search OR a.numero_aluno LIKE :search
-       GROUP BY a.id
+       GROUP BY a.id, a.nome, a.numero_aluno, a.data_nascimento, a.turma_id, t.nome, a.activo
        ORDER BY a.id DESC`,
       { search }
     );
@@ -388,7 +388,7 @@ app.get('/api/encarregados', authMiddleware, async (req, res, next) => {
        LEFT JOIN aluno_encarregado ae ON ae.encarregado_id = e.id
        LEFT JOIN alunos a ON a.id = ae.aluno_id
        WHERE e.nome LIKE :search OR e.telefone LIKE :search OR e.email LIKE :search
-       GROUP BY e.id
+       GROUP BY e.id, e.usuario_id, e.nome, e.telefone, e.email, e.parentesco, e.activo
        ORDER BY e.id DESC`,
       { search }
     );
@@ -490,7 +490,7 @@ app.get('/api/turmas', authMiddleware, async (req, res, next) => {
        FROM turmas t
        LEFT JOIN alunos a ON a.turma_id = t.id AND a.activo = 1
        WHERE t.nome LIKE :search OR t.ano_lectivo LIKE :search OR t.classe LIKE :search
-       GROUP BY t.id
+       GROUP BY t.id, t.nome, t.ano_lectivo, t.classe, t.turno, t.activo
        ORDER BY t.id DESC`,
       { search }
     );
@@ -897,7 +897,7 @@ app.get('/api/dashboard/encarregado', authMiddleware, requireRole('ENCARREGADO')
        JOIN alunos a ON a.id = ae.aluno_id
        LEFT JOIN presencas p ON p.aluno_id = a.id
        WHERE e.usuario_id = :userId
-       GROUP BY a.id`,
+       GROUP BY a.id, a.nome`,
       { userId: req.user.id }
     );
     res.json({ educandos: rows });
