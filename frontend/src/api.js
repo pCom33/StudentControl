@@ -25,6 +25,27 @@ export async function login(email, password) {
   });
 }
 
+export async function forgotPassword(email) {
+  return apiRequest('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email })
+  });
+}
+
+export async function verify2FACode(email, code) {
+  return apiRequest('/auth/verify-2fa', {
+    method: 'POST',
+    body: JSON.stringify({ email, code })
+  });
+}
+
+export async function resetPassword(email, code, newPassword) {
+  return apiRequest('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ email, code, newPassword })
+  });
+}
+
 export function getResource(path) {
   return apiRequest(path);
 }

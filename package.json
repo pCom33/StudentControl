@@ -9,5 +9,8 @@
     "start:frontend": "npm.cmd --prefix frontend run dev -- --host 127.0.0.1 --port 5173",
     "build": "npm.cmd --prefix frontend run build",
     "check:backend": "node --check backend/server.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
   }
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { apiRequest, createResource, deleteResource, getResource, login, updateResource } from './api.js';
+import { apiRequest, createResource, deleteResource, forgotPassword, getResource, login, resetPassword, updateResource, verify2FACode } from './api.js';
 import Logo from './Logo.jsx';
 import './styles.css';
 
@@ -122,6 +122,37 @@ const iconPaths = {
     <path key="lo1" d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />,
     <polyline key="lo2" points="16 17 21 12 16 7" />,
     <line key="lo3" x1="21" y1="12" x2="9" y2="12" />
+  ],
+  file: [
+    <path key="f1" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />,
+    <polyline key="f2" points="14 2 14 8 20 8" />,
+    <line key="f3" x1="16" y1="13" x2="8" y2="13" />,
+    <line key="f4" x1="16" y1="17" x2="8" y2="17" />
+  ],
+  paperclip: [
+    <path key="pc1" d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+  ],
+  close: [
+    <line key="cl1" x1="18" y1="6" x2="6" y2="18" />,
+    <line key="cl2" x1="6" y1="6" x2="18" y2="18" />
+  ],
+  download: [
+    <path key="dl1" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />,
+    <polyline key="dl2" points="7 10 12 15 17 10" />,
+    <line key="dl3" x1="12" y1="15" x2="12" y2="3" />
+  ],
+  info: [
+    <circle key="inf1" cx="12" cy="12" r="10" />,
+    <line key="inf2" x1="12" y1="16" x2="12" y2="12" />,
+    <line key="inf3" x1="12" y1="8" x2="12.01" y2="8" />
+  ],
+  shield: [
+    <path key="sh1" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  ],
+  globe: [
+    <circle key="gl1" cx="12" cy="12" r="10" />,
+    <line key="gl2" x1="2" y1="12" x2="22" y2="12" />,
+    <path key="gl3" d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
   ]
 };
 
@@ -158,11 +189,29 @@ function Icon({ name, alt = '', size = 18, className = '' }) {
   );
 }
 
+function Footer({ isLogin = false }) {
+  const currentYear = new Date().getFullYear();
+  if (isLogin) {
+    return (
+      <footer className="app-footer app-footer-login">
+        <p>&copy; {currentYear} StudentControl. Todos os direitos reservados.</p>
+      </footer>
+    );
+  }
+  return (
+    <footer className="app-footer">
+      <span>StudentControl</span>
+      <span>&copy; {currentYear} Todos os direitos reservados.</span>
+    </footer>
+  );
+}
+
 function App() {
   const [screen, setScreen] = useState('login');
   const [user, setUser] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [menuExpanded, setMenuExpanded] = useState(() => localStorage.getItem('studentcontrol_menu') !== 'collapsed');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   function afterLogin(nextUser) {
     setUser(nextUser);
@@ -173,6 +222,7 @@ function App() {
     localStorage.removeItem('studentcontrol_token');
     setUser(null);
     setScreen('login');
+    setMobileMenuOpen(false);
   }
 
   const title = useMemo(() => {
@@ -191,17 +241,30 @@ function App() {
 
   return (
     <div className={`app-shell ${menuExpanded ? 'menu-expanded' : 'menu-collapsed'}`}>
-      <Sidebar active={screen} setScreen={setScreen} user={user} onLogout={logout} expanded={menuExpanded} onToggle={() => {
-        setMenuExpanded((current) => {
-          localStorage.setItem('studentcontrol_menu', current ? 'collapsed' : 'expanded');
-          return !current;
-        });
-      }} />
+      <div className={`sidebar-backdrop ${mobileMenuOpen ? 'active' : ''}`} onClick={() => setMobileMenuOpen(false)} />
+      <Sidebar
+        active={screen}
+        setScreen={(s) => {
+          setScreen(s);
+          setMobileMenuOpen(false);
+        }}
+        user={user}
+        onLogout={logout}
+        expanded={menuExpanded}
+        mobileOpen={mobileMenuOpen}
+        onToggle={() => {
+          setMenuExpanded((current) => {
+            localStorage.setItem('studentcontrol_menu', current ? 'collapsed' : 'expanded');
+            return !current;
+          });
+        }}
+      />
       <main className="workspace">
-        <Topbar title={title} user={user} onLogout={logout} />
+        <Topbar title={title} user={user} onLogout={logout} onToggleMobileMenu={() => setMobileMenuOpen((open) => !open)} />
         <div className="content">
           <ScreenRouter screen={screen} setScreen={setScreen} user={user} refreshKey={refreshKey} refresh={() => setRefreshKey((key) => key + 1)} />
         </div>
+        <Footer />
       </main>
     </div>
   );
@@ -236,12 +299,39 @@ function ScreenRouter({ screen, setScreen, user, refreshKey, refresh }) {
 }
 
 function Login({ onLogin }) {
-  const [email, setEmail] = useState('secretaria@escola.co.mz');
-  const [password, setPassword] = useState('123456');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState('');
+  const [notice, setNotice] = useState('');
+  const [mode, setMode] = useState('login'); // 'login' | 'request_code' | 'verify_2fa' | 'reset_password'
 
-  async function handleSubmit(event) {
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [pinDigits, setPinDigits] = useState(['', '', '', '']);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  function handlePinChange(index, value) {
+    const digit = value.replace(/\D/g, '').slice(-1);
+    const nextDigits = [...pinDigits];
+    nextDigits[index] = digit;
+    setPinDigits(nextDigits);
+
+    if (digit && index < 3) {
+      const nextInput = document.getElementById(`pin-input-${index + 1}`);
+      if (nextInput) nextInput.focus();
+    }
+  }
+
+  function handlePinKeyDown(index, event) {
+    if (event.key === 'Backspace' && !pinDigits[index] && index > 0) {
+      const prevInput = document.getElementById(`pin-input-${index - 1}`);
+      if (prevInput) prevInput.focus();
+    }
+  }
+
+  async function handleLoginSubmit(event) {
     event.preventDefault();
     setMessage('');
     try {
@@ -253,36 +343,282 @@ function Login({ onLogin }) {
     }
   }
 
+  async function handleRequestCodeSubmit(event) {
+    event.preventDefault();
+    setMessage('');
+    setNotice('');
+    setLoading(true);
+    try {
+      const result = await forgotPassword(recoveryEmail);
+      setNotice(result.message);
+      setPinDigits(['', '', '', '']);
+      setMode('verify_2fa');
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleVerify2FASubmit(event) {
+    event.preventDefault();
+    setMessage('');
+    setNotice('');
+    const fullCode = pinDigits.join('');
+    if (fullCode.length < 4) {
+      setMessage('Por favor, introduza o código completo de 4 dígitos.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await verify2FACode(recoveryEmail, fullCode);
+      setNotice('Código de 4 dígitos verificado com sucesso! Defina a sua nova palavra-passe.');
+      setMode('reset_password');
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResetPasswordSubmit(event) {
+    event.preventDefault();
+    setMessage('');
+    setNotice('');
+    if (newPassword !== confirmPassword) {
+      setMessage('As palavras-passes introduzidas não coincidem.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const fullCode = pinDigits.join('');
+      const result = await resetPassword(recoveryEmail, fullCode, newPassword);
+      setNotice(result.message);
+      setEmail(recoveryEmail);
+      setPassword('');
+      setMode('login');
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function resetToLogin() {
+    setMode('login');
+    setMessage('');
+    setNotice('');
+  }
+
   return (
     <main className="login-page">
-      <form className="login-panel" onSubmit={handleSubmit}>
-        <div className="login-logo-container">
-          <Logo size={42} />
-        </div>
-        <p className="login-subtitle">Iniciar sessão para aceder ao sistema</p>
-        <label>Email</label>
-        <div className="input-icon"><Icon name="mail" /><input type="email" required autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} /></div>
-        <label>Palavra-passe</label>
-        <div className="input-icon"><Icon name="lock" /><input type={showPassword ? 'text' : 'password'} required minLength="6" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></div>
-        <label className="check"><input type="checkbox" checked={showPassword} onChange={(event) => setShowPassword(event.target.checked)} /> Mostrar palavra-passe</label>
-        {message && <div className="alert">{message}</div>}
-        <button className="btn primary" type="submit">Entrar</button>
-        <a>Esqueceu a palavra-passe?</a>
-      </form>
+      <div className="login-page-content">
+        {mode === 'login' && (
+        <form className="login-panel" onSubmit={handleLoginSubmit}>
+          <div className="login-logo-container">
+            <Logo size={42} />
+          </div>
+          <p className="login-subtitle">Iniciar sessão para aceder ao sistema</p>
+
+          <label>Email</label>
+          <div className="input-icon">
+            <Icon name="mail" />
+            <input
+              type="email"
+              required
+              placeholder="seuemail@gmail.com"
+              autoComplete="username"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </div>
+
+          <label>Palavra-passe</label>
+          <div className="input-icon">
+            <Icon name="lock" />
+            <input
+              type={showPassword ? 'text' : 'password'}
+              required
+              placeholder="••••••••"
+              minLength="6"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </div>
+
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={showPassword}
+              onChange={(event) => setShowPassword(event.target.checked)}
+            />
+            Mostrar palavra-passe
+          </label>
+
+          {notice && <div className="notice" style={{ marginTop: '14px' }}>{notice}</div>}
+          {message && <div className="alert">{message}</div>}
+
+          <button className="btn primary" type="submit" style={{ marginTop: '16px' }}>Entrar</button>
+
+          <button
+            type="button"
+            className="forgot-password-link"
+            onClick={() => {
+              setRecoveryEmail(email);
+              setMessage('');
+              setNotice('');
+              setMode('request_code');
+            }}
+          >
+            Esqueceu a palavra-passe?
+          </button>
+        </form>
+      )}
+
+      {mode === 'request_code' && (
+        <form className="login-panel" onSubmit={handleRequestCodeSubmit}>
+          <div className="login-logo-container">
+            <Logo size={42} />
+          </div>
+          <h3 className="recovery-title">Recuperação de Conta</h3>
+          <p className="login-subtitle">Introduza o seu email para receber o código de 4 dígitos</p>
+
+          <label>Email da Conta</label>
+          <div className="input-icon">
+            <Icon name="mail" />
+            <input
+              type="email"
+              required
+              placeholder="seuemail@gmail.com"
+              value={recoveryEmail}
+              onChange={(event) => setRecoveryEmail(event.target.value)}
+            />
+          </div>
+
+          {message && <div className="alert">{message}</div>}
+
+          <div className="recovery-actions">
+            <button className="btn primary" type="submit" disabled={loading}>
+              {loading ? 'A enviar...' : 'Enviar código de 4 dígitos'}
+            </button>
+            <button className="btn secondary" type="button" onClick={resetToLogin}>
+              Voltar ao login
+            </button>
+          </div>
+        </form>
+      )}
+
+      {mode === 'verify_2fa' && (
+        <form className="login-panel" onSubmit={handleVerify2FASubmit}>
+          <div className="login-logo-container">
+            <Logo size={42} />
+          </div>
+          <h3 className="recovery-title">Autenticação de 2 Fatores</h3>
+          <p className="login-subtitle">
+            Enviámos o código de verificação de 4 dígitos para o seu endereço de email <strong>{recoveryEmail}</strong>. Por favor, consulte a sua caixa de entrada.
+          </p>
+
+          <label style={{ textAlign: 'center', marginTop: '12px' }}>Código de Verificação (4 dígitos)</label>
+          <div className="pin-container">
+            {pinDigits.map((digit, idx) => (
+              <input
+                key={idx}
+                id={`pin-input-${idx}`}
+                className="pin-digit"
+                type="text"
+                inputMode="numeric"
+                maxLength={1}
+                value={digit}
+                onChange={(e) => handlePinChange(idx, e.target.value)}
+                onKeyDown={(e) => handlePinKeyDown(idx, e)}
+                autoFocus={idx === 0}
+              />
+            ))}
+          </div>
+
+          {message && <div className="alert">{message}</div>}
+
+          <div className="recovery-actions">
+            <button className="btn primary" type="submit" disabled={loading || pinDigits.join('').length < 4}>
+              {loading ? 'A verificar...' : 'Verificar código 2FA'}
+            </button>
+            <button className="btn secondary" type="button" onClick={resetToLogin}>
+              Voltar ao login
+            </button>
+          </div>
+        </form>
+      )}
+
+      {mode === 'reset_password' && (
+        <form className="login-panel" onSubmit={handleResetPasswordSubmit}>
+          <div className="login-logo-container">
+            <Logo size={42} />
+          </div>
+          <h3 className="recovery-title">Definir Nova Palavra-passe</h3>
+          <p className="login-subtitle">Crie uma nova palavra-passe segura para a sua conta</p>
+
+          <label>Nova Palavra-passe</label>
+          <div className="input-icon">
+            <Icon name="lock" />
+            <input
+              type="password"
+              required
+              minLength="6"
+              placeholder="No mínimo 6 caracteres"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+          </div>
+
+          <label>Confirmar Nova Palavra-passe</label>
+          <div className="input-icon">
+            <Icon name="lock" />
+            <input
+              type="password"
+              required
+              minLength="6"
+              placeholder="Repita a palavra-passe"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+          </div>
+
+          {message && <div className="alert">{message}</div>}
+
+          <div className="recovery-actions">
+            <button className="btn primary" type="submit" disabled={loading}>
+              {loading ? 'A redefinir...' : 'Redefinir Palavra-passe'}
+            </button>
+            <button className="btn secondary" type="button" onClick={resetToLogin}>
+              Voltar ao login
+            </button>
+          </div>
+        </form>
+      )}
+      </div>
+      <Footer isLogin={true} />
     </main>
   );
 }
 
-function Sidebar({ active, setScreen, user, onLogout, expanded, onToggle }) {
+function Sidebar({ active, setScreen, user, onLogout, expanded, mobileOpen, onToggle }) {
   const items = navByRole[user.perfil] || navByRole.SECRETARIA;
   return (
-    <aside className={`sidebar ${expanded ? 'expanded' : 'collapsed'}`}>
-      <button className="menu-button" type="button" title={expanded ? 'Ocultar nomes' : 'Mostrar nomes'} aria-label={expanded ? 'Ocultar nomes do menu' : 'Mostrar nomes do menu'} onClick={onToggle}>
-        <Icon name="menu" />
-        <span className="nav-label">Menu</span>
-      </button>
-      <div className="side-logo-wrap">
-        <Logo size={expanded ? 28 : 32} variant={expanded ? 'full' : 'mark'} />
+    <aside className={`sidebar ${expanded ? 'expanded' : 'collapsed'} ${mobileOpen ? 'mobile-open' : ''}`}>
+      <div className="sidebar-top">
+        <div className="side-logo-wrap">
+          <Logo size={expanded ? 26 : 30} variant={expanded ? 'full' : 'mark'} />
+        </div>
+        <button
+          className="menu-button"
+          type="button"
+          title={expanded ? 'Recolher menu' : 'Expandir menu'}
+          aria-label={expanded ? 'Recolher menu' : 'Expandir menu'}
+          onClick={onToggle}
+        >
+          <Icon name="menu" />
+        </button>
       </div>
       <nav>
         {items.map(([key, label]) => (
@@ -300,14 +636,17 @@ function Sidebar({ active, setScreen, user, onLogout, expanded, onToggle }) {
   );
 }
 
-function Topbar({ title, user, onLogout }) {
+function Topbar({ title, user, onLogout, onToggleMobileMenu }) {
   return (
     <header className="topbar">
+      <button className="mobile-menu-btn" type="button" aria-label="Abrir menu mobile" title="Abrir menu" onClick={onToggleMobileMenu}>
+        <Icon name="menu" />
+      </button>
       <div className="search"><Icon name="search" /><input placeholder="Pesquisar..." readOnly /></div>
       <div className="top-actions">
         <span>{title}</span>
-        <span>{user.nome}</span>
-        <button className="icon-button"><Icon name="bell" /></button>
+        <span className="user-name">{user.nome}</span>
+        <button className="icon-button" aria-label="Notificações"><Icon name="bell" /></button>
         <button className="btn secondary compact" onClick={onLogout}>Sair</button>
       </div>
     </header>
@@ -326,10 +665,377 @@ const guardianColumns = [['nome', 'Nome'], ['telefone', 'Telefone'], ['educando'
 const classColumns = [['nome', 'Nome da turma'], ['numero_alunos', 'Numero de alunos'], ['turno', 'Turno'], ['estado', 'Estado']];
 const subjectColumns = [['nome', 'Disciplina'], ['limite_ppf', 'Limite PPF'], ['estado', 'Estado']];
 
+const onlyLetters = (val) => String(val || '').replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ\s'-]/g, '');
+const onlyDigits = (val) => String(val || '').replace(/\D/g, '');
+const onlyPhone = (val) => String(val || '').replace(/[^0-9+]/g, '');
+
+function EditModal({ resource, row, onClose, onSaved }) {
+  const [form, setForm] = useState(() => ({ ...row }));
+  const [refs, setRefs] = useState({ turmas: [], encarregados: [], alunos: [] });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (resource === 'alunos') {
+      Promise.all([getResource('/turmas'), getResource('/encarregados')])
+        .then(([turmas, encarregados]) => setRefs((r) => ({ ...r, turmas, encarregados })))
+        .catch(() => {});
+    } else if (resource === 'encarregados') {
+      getResource('/alunos')
+        .then((alunos) => setRefs((r) => ({ ...r, alunos })))
+        .catch(() => {});
+    }
+  }, [resource]);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const payload = { ...form };
+      if (resource === 'alunos') {
+        payload.nome = onlyLetters(payload.nome);
+        payload.numero_aluno = onlyDigits(payload.numero_aluno);
+        if (payload.encarregado_id === '') payload.encarregado_id = null;
+        if (payload.turma_id === '') payload.turma_id = null;
+      } else if (resource === 'encarregados') {
+        payload.nome = onlyLetters(payload.nome);
+        payload.telefone = onlyPhone(payload.telefone);
+        if (payload.parentesco) payload.parentesco = onlyLetters(payload.parentesco);
+      } else if (resource === 'professores') {
+        payload.nome = onlyLetters(payload.nome);
+        payload.telefone = onlyPhone(payload.telefone);
+      } else if (resource === 'turmas') {
+        payload.ano_lectivo = onlyDigits(payload.ano_lectivo);
+      } else if (resource === 'disciplinas') {
+        payload.nome = onlyLetters(payload.nome);
+        payload.limite_ppf = onlyDigits(payload.limite_ppf);
+      }
+
+      await updateResource(`/${resource}/${row.id}`, payload);
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="edit-modal-backdrop" onClick={onClose}>
+      <div className="edit-modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="edit-modal-header">
+          <h3>Editar {resource === 'alunos' ? 'Estudante' : resource === 'encarregados' ? 'Encarregado' : resource === 'professores' ? 'Professor' : resource === 'turmas' ? 'Turma' : 'Disciplina'}</h3>
+          <button className="modal-close-btn" type="button" onClick={onClose} title="Fechar"><Icon name="close" size={16} /></button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="edit-modal-body">
+            {error && <div className="alert">{error}</div>}
+
+            {resource === 'alunos' && (
+              <>
+                <div className="modal-field">
+                  <label>Nome do Aluno * (Apenas Letras)</label>
+                  <input
+                    type="text"
+                    required
+                    value={form.nome || ''}
+                    onChange={(e) => setForm({ ...form, nome: onlyLetters(e.target.value) })}
+                    placeholder="Nome completo do aluno"
+                  />
+                  <span className="field-hint">Apenas letras, sem números ou símbolos</span>
+                </div>
+                <div className="modal-field">
+                  <label>Número do Aluno * (Apenas Números)</label>
+                  <input
+                    type="text"
+                    required
+                    value={form.numero_aluno || ''}
+                    onChange={(e) => setForm({ ...form, numero_aluno: onlyDigits(e.target.value) })}
+                    placeholder="Ex.: 1024"
+                  />
+                  <span className="field-hint">Apenas dígitos numéricos</span>
+                </div>
+                <div className="modal-field">
+                  <label>Data de Nascimento</label>
+                  <input
+                    type="date"
+                    value={form.data_nascimento ? String(form.data_nascimento).slice(0, 10) : ''}
+                    onChange={(e) => setForm({ ...form, data_nascimento: e.target.value })}
+                  />
+                </div>
+                <div className="modal-field">
+                  <label>Turma</label>
+                  <select
+                    value={form.turma_id || ''}
+                    onChange={(e) => setForm({ ...form, turma_id: e.target.value ? Number(e.target.value) : '' })}
+                  >
+                    <option value="">Sem Turma</option>
+                    {refs.turmas.map((t) => (
+                      <option key={t.id} value={t.id}>{t.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="modal-field">
+                  <label>Encarregado de Educação</label>
+                  <select
+                    value={form.encarregado_id || ''}
+                    onChange={(e) => setForm({ ...form, encarregado_id: e.target.value ? Number(e.target.value) : '' })}
+                  >
+                    <option value="">Sem Encarregado</option>
+                    {refs.encarregados.map((enc) => (
+                      <option key={enc.id} value={enc.id}>{enc.nome} ({enc.telefone})</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+
+            {resource === 'encarregados' && (
+              <>
+                <div className="modal-field">
+                  <label>Nome do Encarregado * (Apenas Letras)</label>
+                  <input
+                    type="text"
+                    required
+                    value={form.nome || ''}
+                    onChange={(e) => setForm({ ...form, nome: onlyLetters(e.target.value) })}
+                    placeholder="Nome completo do encarregado"
+                  />
+                </div>
+                <div className="modal-field">
+                  <label>Telefone / Celular * (SMS Infobip)</label>
+                  <input
+                    type="text"
+                    required
+                    value={form.telefone || ''}
+                    onChange={(e) => setForm({ ...form, telefone: onlyPhone(e.target.value) })}
+                    placeholder="+25884xxxxxxx"
+                  />
+                  <span className="field-hint">Ex.: +258846634391 ou 846634391</span>
+                </div>
+                <div className="modal-field">
+                  <label>Email do Encarregado (Para Notificações de Falta via Gmail)</label>
+                  <input
+                    type="email"
+                    value={form.email || ''}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    placeholder="email.do.encarregado@gmail.com"
+                  />
+                  <span className="field-hint">Obrigatório para o encarregado receber avisos de falta por email</span>
+                </div>
+                <div className="modal-field">
+                  <label>Parentesco (Apenas Letras)</label>
+                  <input
+                    type="text"
+                    value={form.parentesco || ''}
+                    onChange={(e) => setForm({ ...form, parentesco: onlyLetters(e.target.value) })}
+                    placeholder="Pai, Mãe, Tio, Tutor..."
+                  />
+                </div>
+                <div className="modal-field">
+                  <label>Vincular a Aluno (Educando)</label>
+                  <select
+                    value={form.aluno_id || ''}
+                    onChange={(e) => setForm({ ...form, aluno_id: e.target.value ? Number(e.target.value) : '' })}
+                  >
+                    <option value="">Manter vínculo actual</option>
+                    {refs.alunos.map((al) => (
+                      <option key={al.id} value={al.id}>{al.nome} ({al.numero_aluno})</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+
+            {resource === 'professores' && (
+              <>
+                <div className="modal-field">
+                  <label>Nome do Professor * (Apenas Letras)</label>
+                  <input
+                    type="text"
+                    required
+                    value={form.nome || ''}
+                    onChange={(e) => setForm({ ...form, nome: onlyLetters(e.target.value) })}
+                  />
+                </div>
+                <div className="modal-field">
+                  <label>Email *</label>
+                  <input
+                    type="email"
+                    required
+                    value={form.email || ''}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  />
+                </div>
+                <div className="modal-field">
+                  <label>Telefone</label>
+                  <input
+                    type="text"
+                    value={form.telefone || ''}
+                    onChange={(e) => setForm({ ...form, telefone: onlyPhone(e.target.value) })}
+                  />
+                </div>
+              </>
+            )}
+
+            {resource === 'turmas' && (
+              <>
+                <div className="modal-field">
+                  <label>Nome da Turma *</label>
+                  <input
+                    type="text"
+                    required
+                    value={form.nome || ''}
+                    onChange={(e) => setForm({ ...form, nome: e.target.value })}
+                  />
+                </div>
+                <div className="modal-field">
+                  <label>Ano Lectivo * (Apenas Números)</label>
+                  <input
+                    type="text"
+                    required
+                    value={form.ano_lectivo || ''}
+                    onChange={(e) => setForm({ ...form, ano_lectivo: onlyDigits(e.target.value) })}
+                    placeholder="2026"
+                  />
+                </div>
+                <div className="modal-field">
+                  <label>Classe *</label>
+                  <input
+                    type="text"
+                    required
+                    value={form.classe || ''}
+                    onChange={(e) => setForm({ ...form, classe: e.target.value })}
+                  />
+                </div>
+                <div className="modal-field">
+                  <label>Turno *</label>
+                  <select
+                    value={form.turno || 'Manha'}
+                    onChange={(e) => setForm({ ...form, turno: e.target.value })}
+                  >
+                    <option value="Manha">Manhã</option>
+                    <option value="Tarde">Tarde</option>
+                    <option value="Noite">Noite</option>
+                  </select>
+                </div>
+              </>
+            )}
+
+            {resource === 'disciplinas' && (
+              <>
+                <div className="modal-field">
+                  <label>Nome da Disciplina * (Apenas Letras)</label>
+                  <input
+                    type="text"
+                    required
+                    value={form.nome || ''}
+                    onChange={(e) => setForm({ ...form, nome: onlyLetters(e.target.value) })}
+                  />
+                </div>
+                <div className="modal-field">
+                  <label>Limite PPF * (Apenas Números)</label>
+                  <input
+                    type="text"
+                    required
+                    value={form.limite_ppf || ''}
+                    onChange={(e) => setForm({ ...form, limite_ppf: onlyDigits(e.target.value) })}
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="modal-field">
+              <label>Estado</label>
+              <select
+                value={form.activo === 0 || form.estado === 'Inactivo' ? '0' : '1'}
+                onChange={(e) => setForm({ ...form, activo: Number(e.target.value) })}
+              >
+                <option value="1">Activo</option>
+                <option value="0">Inactivo</option>
+              </select>
+            </div>
+          </div>
+          <div className="edit-modal-footer">
+            <button className="btn secondary" type="button" onClick={onClose}>Cancelar</button>
+            <button className="btn primary" type="submit" disabled={loading}>
+              {loading ? 'A guardar...' : 'Guardar Alterações'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function DeleteModal({ resource, row, onClose, onDeleted }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const label = row?.nome || row?.numero_aluno || 'este registo';
+  const resourceLabel = resource === 'alunos' ? 'Estudante' :
+                        resource === 'encarregados' ? 'Encarregado de Educação' :
+                        resource === 'professores' ? 'Professor' :
+                        resource === 'turmas' ? 'Turma' : 'Disciplina';
+
+  async function handleConfirmDelete() {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await deleteResource(`/${resource}/${row.id}?permanent=true`);
+      onDeleted(result.message || 'Registo eliminado permanentemente com sucesso da base de dados.');
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Erro ao eliminar registo.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="edit-modal-backdrop" onClick={() => !loading && onClose()}>
+      <div className="edit-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+        <div className="edit-modal-header" style={{ borderBottom: '1px solid #fee2e2' }}>
+          <h3 style={{ color: '#dc2626', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Icon name="trash" size={18} />
+            Eliminar {resourceLabel}
+          </h3>
+          <button className="modal-close-btn" type="button" onClick={onClose} disabled={loading} title="Fechar">
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+        <div className="edit-modal-body">
+          {error && <div className="alert" style={{ marginBottom: '12px' }}>{error}</div>}
+          <div className="delete-confirm-box">
+            <p style={{ margin: 0 }}>
+              Tem a certeza de que deseja eliminar permanentemente <strong>"{label}"</strong> da base de dados?
+            </p>
+            <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#b91c1c' }}>
+              Atenção: Esta ação é definitiva e removerá todos os vínculos (faltas, presenças, notas, PPF e associações) associados a este registo na base de dados.
+            </p>
+          </div>
+        </div>
+        <div className="edit-modal-footer">
+          <button className="btn secondary" type="button" onClick={onClose} disabled={loading}>
+            Cancelar
+          </button>
+          <button className="btn danger" type="button" onClick={handleConfirmDelete} disabled={loading} style={{ minWidth: '140px' }}>
+            {loading ? 'A eliminar...' : 'Confirmar e Eliminar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ResourceList({ resource, title, addScreen, columns, detailScreen, setScreen, setSelected, refreshKey, refresh }) {
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState('');
   const [message, setMessage] = useState('');
+  const [editingRow, setEditingRow] = useState(null);
+  const [deletingRow, setDeletingRow] = useState(null);
 
   useEffect(() => {
     load();
@@ -337,7 +1043,7 @@ function ResourceList({ resource, title, addScreen, columns, detailScreen, setSc
 
   async function load() {
     try {
-      const data = await getResource(`/ ${resource}`.replace(' ', ''));
+      const data = await getResource(`/${resource}`);
       setRows(data);
     } catch (error) {
       setMessage(error.message);
@@ -345,10 +1051,11 @@ function ResourceList({ resource, title, addScreen, columns, detailScreen, setSc
   }
 
   async function remove(row) {
-    if (!window.confirm('Pretende desactivar este registo?')) return;
+    const label = row.nome || row.numero_aluno || 'este registo';
     try {
       const result = await deleteResource(`/${resource}/${row.id}`);
       setMessage(result.message);
+      load();
       refresh();
     } catch (error) {
       setMessage(error.message);
@@ -368,13 +1075,39 @@ function ResourceList({ resource, title, addScreen, columns, detailScreen, setSc
           setSelected(row);
           setScreen(detailScreen);
         } : undefined}
-        onDelete={['alunos', 'professores', 'encarregados'].includes(resource) ? remove : undefined}
+        onEdit={(row) => setEditingRow(row)}
+        onDelete={remove}
+        onDeletePermanent={(row) => setDeletingRow(row)}
       />
+      {editingRow && (
+        <EditModal
+          resource={resource}
+          row={editingRow}
+          onClose={() => setEditingRow(null)}
+          onSaved={() => {
+            setMessage('Alterações guardadas com sucesso na base de dados.');
+            load();
+            refresh();
+          }}
+        />
+      )}
+      {deletingRow && (
+        <DeleteModal
+          resource={resource}
+          row={deletingRow}
+          onClose={() => setDeletingRow(null)}
+          onDeleted={(msg) => {
+            setMessage(msg);
+            load();
+            refresh();
+          }}
+        />
+      )}
     </section>
   );
 }
 
-function Toolbar({ title, add, search, setSearch }) {
+function Toolbar({ title, add, addLabel = 'Novo', search, setSearch }) {
   return (
     <div className="toolbar">
       <div>
@@ -384,12 +1117,12 @@ function Toolbar({ title, add, search, setSearch }) {
           <select><option>Estado: Todos</option></select>
         </div>
       </div>
-      {add && <button className="btn primary icon-text" onClick={add}><Icon name="add" />Novo</button>}
+      {add && <button className="btn primary icon-text" type="button" onClick={add}><Icon name="add" />{addLabel}</button>}
     </div>
   );
 }
 
-function DataTable({ rows, columns, onOpen, onDelete }) {
+function DataTable({ rows, columns, onOpen, onEdit, onDelete, onDeletePermanent, onJustify }) {
   return (
     <div className="table-wrap">
       <table>
@@ -401,12 +1134,48 @@ function DataTable({ rows, columns, onOpen, onDelete }) {
               <td><input type="checkbox" /></td>
               {columns.map(([key]) => (
                 <td key={key}>
-                  {key === 'nome' && onOpen ? <button className="link-cell" onClick={() => onOpen(row)}><Icon name="user" />{row[key]}</button> : formatCell(row[key])}
+                  {key === 'documento_anexo' ? (
+                    row[key] ? (
+                      <a
+                        href={`http://127.0.0.1:4000${row[key]}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="anexo-btn"
+                        title="Abrir scanner/PDF do comprovativo"
+                      >
+                        <Icon name="file" size={13} />
+                        <span>Ver Documento</span>
+                      </a>
+                    ) : (
+                      <span className="anexo-vazio">Sem anexo</span>
+                    )
+                  ) : key === 'nome' && onOpen ? (
+                    <button className="link-cell" onClick={() => onOpen(row)}><Icon name="user" />{row[key]}</button>
+                  ) : (
+                    formatCell(row[key])
+                  )}
                 </td>
               ))}
               <td className="actions-cell">
-                {onOpen && <button className="btn secondary compact" onClick={() => onOpen(row)}>Abrir</button>}
-                {onDelete && <button className="btn secondary compact" onClick={() => onDelete(row)}>Desactivar</button>}
+                {onOpen && <button className="btn secondary compact" type="button" onClick={() => onOpen(row)}>Abrir</button>}
+                {onEdit && (
+                  <button className="btn secondary compact icon-text" type="button" title="Editar registo na base de dados" onClick={() => onEdit(row)}>
+                    <Icon name="edit" size={13} />
+                    <span>Editar</span>
+                  </button>
+                )}
+                {onDelete && <button className="btn secondary compact" type="button" title="Desactivar registo" onClick={() => onDelete(row)}>Desactivar</button>}
+                {onDeletePermanent && (
+                  <button className="btn danger compact icon-text" type="button" title="Eliminar permanentemente da base de dados" onClick={() => onDeletePermanent(row)}>
+                    <Icon name="trash" size={13} />
+                    <span>Eliminar</span>
+                  </button>
+                )}
+                {onJustify && row.estado !== 'Justificada' && (
+                  <button className="btn primary compact" type="button" onClick={() => onJustify(row)}>
+                    Justificar (Anexar PDF)
+                  </button>
+                )}
               </td>
             </tr>
           ))}
@@ -458,11 +1227,14 @@ function Metric({ icon, label, value, tone }) {
 function StudentForm({ setScreen, refresh }) {
   const [refs, setRefs] = useState({ turmas: [], encarregados: [] });
   const [form, setForm] = useState({ nome: '', numero_aluno: '', data_nascimento: '', turma_id: '', encarregado_id: '', activo: 1 });
-  useEffect(() => { Promise.all([getResource('/turmas'), getResource('/encarregados')]).then(([turmas, encarregados]) => setRefs({ turmas, encarregados })); }, []);
+  useEffect(() => { Promise.all([getResource('/turmas'), getResource('/encarregados')])
+    .then(([turmas, encarregados]) => setRefs({ turmas, encarregados }))
+    .catch(() => {});
+  }, []);
   return (
     <ApiForm title="Novo aluno" submit="Guardar aluno" back="students" setScreen={setScreen} refresh={refresh} path="/alunos" form={form} setForm={setForm}>
-      <input placeholder="Nome completo *" required minLength="2" maxLength="160" value={form.nome} onChange={bind(setForm, 'nome')} />
-      <input placeholder="Numero de aluno *" required maxLength="60" value={form.numero_aluno} onChange={bind(setForm, 'numero_aluno')} />
+      <input placeholder="Nome completo (Apenas letras) *" required minLength="2" maxLength="160" value={form.nome} onChange={(e) => setForm({ ...form, nome: onlyLetters(e.target.value) })} />
+      <input placeholder="Número do aluno (Apenas números) *" required maxLength="60" value={form.numero_aluno} onChange={(e) => setForm({ ...form, numero_aluno: onlyDigits(e.target.value) })} />
       <input type="date" max={new Date().toISOString().slice(0, 10)} value={form.data_nascimento} onChange={bind(setForm, 'data_nascimento')} />
       <select value={form.turma_id} onChange={bind(setForm, 'turma_id')}><option value="">Turma</option>{refs.turmas.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}</select>
       <select value={form.encarregado_id} onChange={bind(setForm, 'encarregado_id')}><option value="">Encarregado</option>{refs.encarregados.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}</select>
@@ -475,9 +1247,9 @@ function TeacherForm({ setScreen, refresh }) {
   const [form, setForm] = useState({ nome: '', email: '', telefone: '', password: '123456', activo: 1 });
   return (
     <ApiForm title="Novo professor" submit="Guardar professor" back="teachers" setScreen={setScreen} refresh={refresh} path="/professores" form={form} setForm={setForm}>
-      <input placeholder="Nome completo *" required minLength="2" maxLength="160" value={form.nome} onChange={bind(setForm, 'nome')} />
+      <input placeholder="Nome completo (Apenas letras) *" required minLength="2" maxLength="160" value={form.nome} onChange={(e) => setForm({ ...form, nome: onlyLetters(e.target.value) })} />
       <input type="email" placeholder="Email *" required maxLength="160" value={form.email} onChange={bind(setForm, 'email')} />
-      <input type="tel" placeholder="Telefone (+258...)" pattern="(?:\\+?258)?8[2-7][0-9]{7}" value={form.telefone} onChange={bind(setForm, 'telefone')} />
+      <input type="tel" placeholder="Telefone (+258...)" value={form.telefone} onChange={(e) => setForm({ ...form, telefone: onlyPhone(e.target.value) })} />
       <input type="password" placeholder="Palavra-passe inicial *" required minLength="6" value={form.password} onChange={bind(setForm, 'password')} />
       <select value={form.activo} onChange={bind(setForm, 'activo')}><option value="1">Activo</option><option value="0">Inactivo</option></select>
     </ApiForm>
@@ -487,14 +1259,14 @@ function TeacherForm({ setScreen, refresh }) {
 function GuardianForm({ setScreen, refresh }) {
   const [students, setStudents] = useState([]);
   const [form, setForm] = useState({ nome: '', telefone: '+258876386514', email: '', parentesco: '', aluno_id: '', activo: 1 });
-  useEffect(() => { getResource('/alunos').then(setStudents); }, []);
+  useEffect(() => { getResource('/alunos').then(setStudents).catch(() => {}); }, []);
   return (
     <ApiForm title="Novo encarregado" submit="Guardar encarregado" back="guardians" setScreen={setScreen} refresh={refresh} path="/encarregados" form={form} setForm={setForm}>
-      <input placeholder="Nome completo *" required minLength="2" maxLength="160" value={form.nome} onChange={bind(setForm, 'nome')} />
-      <input type="tel" placeholder="Telefone para notificacoes *" required pattern="(?:\\+?258)?8[2-7][0-9]{7}" value={form.telefone} onChange={bind(setForm, 'telefone')} />
-      <input type="email" placeholder="Email" maxLength="160" value={form.email} onChange={bind(setForm, 'email')} />
-      <input placeholder="Parentesco" value={form.parentesco} onChange={bind(setForm, 'parentesco')} />
-      <select value={form.aluno_id} onChange={bind(setForm, 'aluno_id')}><option value="">Educando</option>{students.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}</select>
+      <input placeholder="Nome completo (Apenas letras) *" required minLength="2" maxLength="160" value={form.nome} onChange={(e) => setForm({ ...form, nome: onlyLetters(e.target.value) })} />
+      <input type="tel" placeholder="Telefone para notificações (+258...) *" required value={form.telefone} onChange={(e) => setForm({ ...form, telefone: onlyPhone(e.target.value) })} />
+      <input type="email" placeholder="Email do encarregado (para receber faltas)" maxLength="160" value={form.email} onChange={bind(setForm, 'email')} />
+      <input placeholder="Parentesco (Apenas letras)" value={form.parentesco} onChange={(e) => setForm({ ...form, parentesco: onlyLetters(e.target.value) })} />
+      <select value={form.aluno_id} onChange={bind(setForm, 'aluno_id')}><option value="">Educando (Aluno)</option>{students.map((s) => <option key={s.id} value={s.id}>{s.nome} ({s.numero_aluno})</option>)}</select>
       <select value={form.activo} onChange={bind(setForm, 'activo')}><option value="1">Activo</option><option value="0">Inactivo</option></select>
     </ApiForm>
   );
@@ -505,9 +1277,9 @@ function ClassForm({ setScreen, refresh }) {
   return (
     <ApiForm title="Nova turma" submit="Guardar turma" back="classes" setScreen={setScreen} refresh={refresh} path="/turmas" form={form} setForm={setForm}>
       <input placeholder="Nome da turma *" required maxLength="80" value={form.nome} onChange={bind(setForm, 'nome')} />
-      <input type="number" min="2000" max="2100" placeholder="Ano lectivo *" required value={form.ano_lectivo} onChange={bind(setForm, 'ano_lectivo')} />
+      <input type="text" placeholder="Ano lectivo (Apenas números) *" required value={form.ano_lectivo} onChange={(e) => setForm({ ...form, ano_lectivo: onlyDigits(e.target.value) })} />
       <input placeholder="Classe *" required maxLength="40" value={form.classe} onChange={bind(setForm, 'classe')} />
-      <select value={form.turno} onChange={bind(setForm, 'turno')}><option>Manha</option><option>Tarde</option><option>Noite</option></select>
+      <select value={form.turno} onChange={bind(setForm, 'turno')}><option value="Manha">Manhã</option><option value="Tarde">Tarde</option><option value="Noite">Noite</option></select>
     </ApiForm>
   );
 }
@@ -516,8 +1288,8 @@ function SubjectForm({ setScreen, refresh }) {
   const [form, setForm] = useState({ nome: '', limite_ppf: 6, activo: 1 });
   return (
     <ApiForm title="Nova disciplina" submit="Guardar disciplina" back="subjects" setScreen={setScreen} refresh={refresh} path="/disciplinas" form={form} setForm={setForm}>
-      <input placeholder="Nome *" required maxLength="120" value={form.nome} onChange={bind(setForm, 'nome')} />
-      <input type="number" min="1" max="100" required placeholder="Limite PPF" value={form.limite_ppf} onChange={bind(setForm, 'limite_ppf')} />
+      <input placeholder="Nome da disciplina (Apenas letras) *" required maxLength="120" value={form.nome} onChange={(e) => setForm({ ...form, nome: onlyLetters(e.target.value) })} />
+      <input type="text" required placeholder="Limite PPF (Apenas números)" value={form.limite_ppf} onChange={(e) => setForm({ ...form, limite_ppf: onlyDigits(e.target.value) })} />
       <select value={form.activo} onChange={bind(setForm, 'activo')}><option value="1">Activo</option><option value="0">Inactivo</option></select>
     </ApiForm>
   );
@@ -707,29 +1479,353 @@ function Absences({ refreshKey, refresh }) {
   const [message, setMessage] = useState('');
   const [justifyId, setJustifyId] = useState('');
   const [motivo, setMotivo] = useState('');
-  useEffect(() => { getResource('/faltas').then(setRows).catch((error) => setMessage(error.message)); }, [refreshKey]);
+  const [observacao, setObservacao] = useState('');
+  const [anexo, setAnexo] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const [showMarcarModal, setShowMarcarModal] = useState(false);
+  const [alunosList, setAlunosList] = useState([]);
+  const [disciplinasList, setDisciplinasList] = useState([]);
+  const [marcarForm, setMarcarForm] = useState({ aluno_id: '', disciplina_id: '', data: new Date().toISOString().slice(0, 10), hora_inicio: '08:00', hora_fim: '09:30' });
+  const [marcarLoading, setMarcarLoading] = useState(false);
+  const [marcarMsg, setMarcarMsg] = useState('');
+
+  useEffect(() => {
+    getResource('/faltas').then(setRows).catch((error) => setMessage(error.message));
+  }, [refreshKey]);
+
+  async function openMarcarModal() {
+    setMarcarMsg('');
+    setShowMarcarModal(true);
+    try {
+      const [alunos, disciplinas] = await Promise.all([
+        getResource('/alunos'),
+        getResource('/disciplinas')
+      ]);
+      setAlunosList(alunos || []);
+      setDisciplinasList(disciplinas || []);
+      if (alunos && alunos.length > 0) {
+        setMarcarForm(prev => ({
+          ...prev,
+          aluno_id: prev.aluno_id || String(alunos[0].id),
+          disciplina_id: prev.disciplina_id || (disciplinas?.[0] ? String(disciplinas[0].id) : '')
+        }));
+      }
+    } catch (err) {
+      setMarcarMsg(err.message);
+    }
+  }
+
+  async function handleMarcarFalta(e) {
+    e.preventDefault();
+    if (!marcarForm.aluno_id || !marcarForm.disciplina_id) {
+      setMarcarMsg('Seleccione o aluno e a disciplina.');
+      return;
+    }
+    setMarcarLoading(true);
+    setMarcarMsg('');
+    try {
+      const res = await createResource('/presencas/marcar-falta', {
+        aluno_id: Number(marcarForm.aluno_id),
+        disciplina_id: Number(marcarForm.disciplina_id),
+        data_aula: marcarForm.data,
+        data: marcarForm.data,
+        hora_inicio: marcarForm.hora_inicio,
+        hora_fim: marcarForm.hora_fim
+      });
+      setMessage(res.message || 'Falta registada e notificação enviada ao encarregado.');
+      setShowMarcarModal(false);
+      refresh();
+    } catch (err) {
+      setMarcarMsg(err.message);
+    } finally {
+      setMarcarLoading(false);
+    }
+  }
+
+  function handleFileSelect(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert('O ficheiro é demasiado grande. Por favor envie um ficheiro com até 10MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAnexo({
+        nome: file.name,
+        tipo: file.type,
+        base64: reader.result,
+        sizeKb: Math.round(file.size / 1024)
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+
   async function justify(event) {
     event.preventDefault();
+    if (!justifyId) {
+      setMessage('Por favor, seleccione a falta que deseja justificar.');
+      return;
+    }
+    setLoading(true);
+    setMessage('');
     try {
-      const result = await updateResource(`/presencas/${justifyId}/justificar`, { motivo });
+      const payload = {
+        motivo,
+        observacao,
+        anexo: anexo ? { nome: anexo.nome, tipo: anexo.tipo, base64: anexo.base64 } : null
+      };
+      const result = await updateResource(`/presencas/${justifyId}/justificar`, payload);
       setMessage(result.message);
       setJustifyId('');
       setMotivo('');
+      setObservacao('');
+      setAnexo(null);
       refresh();
     } catch (error) {
       setMessage(error.message);
+    } finally {
+      setLoading(false);
     }
   }
+
+  const columns = [
+    ['aluno', 'Aluno'],
+    ['turma', 'Turma'],
+    ['disciplina', 'Disciplina'],
+    ['data_aula', 'Data'],
+    ['estado', 'Estado'],
+    ['motivo', 'Motivo'],
+    ['documento_anexo', 'Comprovativo']
+  ];
+
+  const quickMotivos = [
+    'Atestado Médico / Doença',
+    'Receita Médica / Farmácia',
+    'Consulta Clínica / Hospitalar',
+    'Motivo de Força Maior'
+  ];
+
+  const pendingAbsences = rows.filter((r) => r.estado !== 'Justificada');
+
   return (
     <section className="data-page">
-      <Toolbar title="Faltas" />
+      <Toolbar title="Controlo de Faltas e Justificações" add={openMarcarModal} addLabel="Marcar Falta (SMS + Email)" />
       {message && <div className="notice">{message}</div>}
-      <DataTable rows={rows} columns={[['aluno', 'Aluno'], ['turma', 'Turma'], ['disciplina', 'Disciplina'], ['data_aula', 'Data'], ['estado', 'Estado']]} />
-      <form className="inline-form" onSubmit={justify}>
-        <select required value={justifyId} onChange={(event) => setJustifyId(event.target.value)}><option value="">Falta para justificar</option>{rows.filter((r) => r.estado !== 'Justificada').map((r) => <option key={r.id} value={r.id}>{r.aluno} - {r.disciplina}</option>)}</select>
-        <input required minLength="3" maxLength="255" placeholder="Motivo *" value={motivo} onChange={(event) => setMotivo(event.target.value)} />
-        <button className="btn primary">Justificar</button>
-      </form>
+
+      {showMarcarModal && (
+        <div className="edit-modal-backdrop" onClick={() => !marcarLoading && setShowMarcarModal(false)}>
+          <div className="edit-modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+            <div className="edit-modal-header">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Icon name="attendance" size={20} />
+                Marcar Falta (Disparo Imediato SMS + Email)
+              </h3>
+              <button type="button" className="icon-btn" onClick={() => setShowMarcarModal(false)} disabled={marcarLoading}>
+                <Icon name="close" size={16} />
+              </button>
+            </div>
+            <form onSubmit={handleMarcarFalta}>
+              <div className="edit-modal-body">
+                {marcarMsg && <div className="notice" style={{ marginBottom: '12px' }}>{marcarMsg}</div>}
+                <div className="modal-field">
+                  <label>Aluno *</label>
+                  <select
+                    required
+                    value={marcarForm.aluno_id}
+                    onChange={e => setMarcarForm({ ...marcarForm, aluno_id: e.target.value })}
+                  >
+                    <option value="">-- Seleccione o Aluno --</option>
+                    {alunosList.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.nome} (Nº {a.numero_aluno || a.id}) - {a.turma || ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="modal-field">
+                  <label>Disciplina *</label>
+                  <select
+                    required
+                    value={marcarForm.disciplina_id}
+                    onChange={e => setMarcarForm({ ...marcarForm, disciplina_id: e.target.value })}
+                  >
+                    <option value="">-- Seleccione a Disciplina --</option>
+                    {disciplinasList.map(d => (
+                      <option key={d.id} value={d.id}>
+                        {d.nome} ({d.codigo || ''})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="modal-field">
+                  <label>Data da Falta *</label>
+                  <input
+                    type="date"
+                    required
+                    value={marcarForm.data}
+                    onChange={e => setMarcarForm({ ...marcarForm, data: e.target.value })}
+                  />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="modal-field">
+                    <label>Hora Início</label>
+                    <input
+                      type="time"
+                      value={marcarForm.hora_inicio}
+                      onChange={e => setMarcarForm({ ...marcarForm, hora_inicio: e.target.value })}
+                    />
+                  </div>
+                  <div className="modal-field">
+                    <label>Hora Fim</label>
+                    <input
+                      type="time"
+                      value={marcarForm.hora_fim}
+                      onChange={e => setMarcarForm({ ...marcarForm, hora_fim: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <p style={{ fontSize: '12px', color: 'var(--slate)', margin: '4px 0 0 0' }}>
+                  Ao submeter, o sistema marca a falta, verifica o limite PPF e envia automaticamente SMS (Infobip) e Email (Gmail) ao encarregado do aluno.
+                </p>
+              </div>
+              <div className="edit-modal-footer">
+                <button type="button" className="btn secondary" onClick={() => setShowMarcarModal(false)} disabled={marcarLoading}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn primary" disabled={marcarLoading}>
+                  {marcarLoading ? 'A registar e a enviar...' : 'Marcar Falta e Notificar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <DataTable
+        rows={rows}
+        columns={columns}
+        onJustify={(row) => {
+          setJustifyId(String(row.id));
+          if (!motivo) setMotivo('Atestado Médico / Doença');
+          const el = document.getElementById('justificar-form-card');
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }}
+      />
+
+      <div className="justify-card" id="justificar-form-card">
+        <div className="justify-card-head">
+          <Icon name="attendance" size={20} />
+          <h3>Justificar Falta e Anexar Documento (PDF ou Scanner de Receita/Atestado)</h3>
+        </div>
+
+        <form onSubmit={justify}>
+          <div className="justify-grid">
+            <div className="justify-field full-width">
+              <label>Seleccionar Falta Não Justificada *</label>
+              <select
+                required
+                value={justifyId}
+                onChange={(event) => setJustifyId(event.target.value)}
+              >
+                <option value="">-- Escolha o aluno e a aula correspondente --</option>
+                {pendingAbsences.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.aluno} — {r.disciplina} ({r.turma}, {r.data_aula})
+                  </option>
+                ))}
+              </select>
+              {pendingAbsences.length === 0 && (
+                <span style={{ fontSize: '12px', color: '#16a34a', marginTop: '2px' }}>
+                  Não existem faltas pendentes para justificação no momento.
+                </span>
+              )}
+            </div>
+
+            <div className="justify-field full-width">
+              <label>Motivo da Justificação *</label>
+              <input
+                required
+                minLength="3"
+                maxLength="255"
+                placeholder="Ex.: Doença comprovada por receita/atestado médico"
+                value={motivo}
+                onChange={(event) => setMotivo(event.target.value)}
+              />
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--slate)' }}>Preenchimento rápido:</span>
+                {quickMotivos.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    className="btn secondary compact"
+                    style={{ fontSize: '11.5px', padding: '2px 8px', borderRadius: '4px' }}
+                    onClick={() => setMotivo(preset)}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="justify-field">
+              <label>Observações / Notas Adicionais (Opcional)</label>
+              <textarea
+                rows={3}
+                placeholder="Ex.: Repouso de 3 dias recomendado pelo médico assistente Dr. António."
+                value={observacao}
+                onChange={(event) => setObservacao(event.target.value)}
+              />
+            </div>
+
+            <div className="justify-field">
+              <label>Anexo do Documento (PDF ou Scanner de Receita / Atestado)</label>
+              <label className="file-upload-box">
+                <input
+                  id="falta-file-input"
+                  type="file"
+                  accept=".pdf,image/png,image/jpeg,image/jpg,image/webp"
+                  onChange={handleFileSelect}
+                />
+                <div className="file-upload-prompt">
+                  <Icon name="paperclip" size={24} />
+                  <span><strong>Clique aqui</strong> para seleccionar o ficheiro PDF ou Scanner</span>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>Formatos suportados: PDF, JPG, PNG e WebP (até 10MB)</span>
+                </div>
+              </label>
+
+              {anexo && (
+                <div className="file-preview-badge" style={{ marginTop: '10px' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <Icon name="file" size={16} />
+                    Documento: {anexo.nome} ({anexo.sizeKb} KB)
+                  </span>
+                  <button
+                    type="button"
+                    className="remove-file-btn"
+                    title="Remover anexo"
+                    onClick={() => setAnexo(null)}
+                  >
+                    <Icon name="close" size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+            <button
+              className="btn primary"
+              type="submit"
+              disabled={loading || !justifyId || !motivo}
+              style={{ minWidth: '160px' }}
+            >
+              {loading ? 'A guardar...' : 'Justificar Falta'}
+            </button>
+          </div>
+        </form>
+      </div>
     </section>
   );
 }
@@ -745,17 +1841,20 @@ function Notifications({ refreshKey }) {
   const [activeTab, setActiveTab] = useState('history');
   const [smsConfig, setSmsConfig] = useState(null);
   const [templates, setTemplates] = useState({ FALTA: '', PPF: '', GERAL: '' });
-  const [testPhone, setTestPhone] = useState('+258876386514');
-  const [testMessage, setTestMessage] = useState('Aviso StudentControl: Teste de disparo de SMS enviado com sucesso para o encarregado.');
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
+  const [turmas, setTurmas] = useState([]);
+  const [broadcastDestino, setBroadcastDestino] = useState('TODOS');
+  const [broadcastTurmaId, setBroadcastTurmaId] = useState('');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
 
   useEffect(() => {
-    getResource('/notificacoes').then(setRows).catch(() => {});
+    getResource('/notificacoes').then(setRows).catch(() => { });
+    getResource('/turmas').then(setTurmas).catch(() => { });
     getResource('/config/sms').then((config) => {
       setSmsConfig(config);
       if (config.templates) setTemplates(config.templates);
-    }).catch(() => {});
+    }).catch(() => { });
   }, [refreshKey]);
 
   async function handleSaveTemplates(e) {
@@ -772,28 +1871,21 @@ function Notifications({ refreshKey }) {
     }
   }
 
-  async function handleSendTestSms(e) {
+  async function handleSendBroadcast(e) {
     e.preventDefault();
     setNotice('');
     setLoading(true);
     try {
-      const res = await createResource('/config/sms/test', {
-        destinatario: testPhone,
-        mensagem: testMessage
+      const res = await createResource('/notificacoes/comunicado', {
+        destino: broadcastDestino,
+        turma_id: broadcastTurmaId || null,
+        mensagem: broadcastMessage
       });
-      const dispatch = res.result?.dispatchResult || {};
-      const estado = res.result?.estado;
-
-      if (!dispatch.success) {
-        setNotice(`❌ Falha no disparo do SMS: ${dispatch.error || 'A gateway Infobip rejeitou a mensagem.'}`);
-      } else if (dispatch.simulated) {
-        setNotice(`⚠️ Disparo processado em MODO DE SIMULAÇÃO! ${dispatch.detail || 'Nenhuma SMS real foi enviada ao telemóvel.'}`);
-      } else {
-        setNotice(`✅ SMS enviada com sucesso para a gateway Infobip! (Status: ${dispatch.statusName || 'PENDING_ACCEPTED'} | MessageID: ${dispatch.messageId || 'N/A'})`);
-      }
+      setNotice(`[Sucesso] ${res.message || 'Disparo em lote concluído com sucesso!'}`);
+      setBroadcastMessage('');
       getResource('/notificacoes').then(setRows);
     } catch (err) {
-      setNotice(`❌ Falha no disparo: ${err.message}`);
+      setNotice(`[Erro] Falha no disparo em lote: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -803,25 +1895,25 @@ function Notifications({ refreshKey }) {
     <section className="data-page">
       <div className="toolbar" style={{ flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h2>Avisos e Notificações SMS</h2>
-          <p className="muted">Gestão de disparos e personalização de mensagens para encarregados.</p>
+          <h2>Notificações aos Encarregados de Educação</h2>
+          <p className="muted">Disparos em lote e automáticos emitidos simultaneamente para todos os encarregados.</p>
         </div>
         <div className="sms-mode-badge">
-          <Icon name="phone" size={16} />
-          <span>Modo: <strong>{smsConfig?.mode === 'infobip' ? 'Infobip Live API' : 'Simulação'}</strong></span>
-          <span className="api-tag">{smsConfig?.apiKey || 'Sem API Key'}</span>
+          <Icon name="notifications" size={16} />
+          <span>Disparo: <strong>Em Lote (+50 Encarregados)</strong></span>
+          <span className="api-tag">{smsConfig?.apiKey ? 'Gateway Infobip Activo' : 'Modo Simulação (SMS)'}</span>
         </div>
       </div>
 
       <div className="tab-navigation">
         <button className={activeTab === 'history' ? 'active' : ''} onClick={() => setActiveTab('history')}>
-          <Icon name="attendance" size={16} /> Histórico de Envio
+          <Icon name="attendance" size={16} /> Histórico de Envio aos Encarregados
+        </button>
+        <button className={activeTab === 'broadcast' ? 'active' : ''} onClick={() => setActiveTab('broadcast')}>
+          <Icon name="notifications" size={16} /> Enviar para Vários Encarregados (Lote)
         </button>
         <button className={activeTab === 'templates' ? 'active' : ''} onClick={() => setActiveTab('templates')}>
           <Icon name="edit" size={16} /> Personalizar Mensagens SMS
-        </button>
-        <button className={activeTab === 'test' ? 'active' : ''} onClick={() => setActiveTab('test')}>
-          <Icon name="notifications" size={16} /> Disparo de Teste (Infobip)
         </button>
       </div>
 
@@ -833,19 +1925,84 @@ function Notifications({ refreshKey }) {
           columns={[
             ['encarregado', 'Encarregado'],
             ['tipo', 'Tipo'],
-            ['destinatario', 'Destinatário'],
-            ['mensagem', 'Mensagem Personalizada'],
+            ['destinatario', 'Contacto do Encarregado'],
+            ['mensagem', 'Mensagem Emitida'],
             ['estado', 'Estado'],
             ['criado_em', 'Data/Hora']
           ]}
         />
       )}
 
+      {activeTab === 'broadcast' && (
+        <form className="form-page" onSubmit={handleSendBroadcast}>
+          <h3>Disparo de Notificação em Lote para Encarregados</h3>
+          <p className="muted">
+            Envie uma notificação simultânea (por SMS e Email) para múltiplos encarregados (50 ou mais) de uma só vez utilizando o envio em lote de alta capacidade.
+          </p>
+
+          <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', marginTop: '16px' }}>
+            <div>
+              <label>Público Alvo do Disparo</label>
+              <select
+                value={broadcastDestino}
+                onChange={(e) => setBroadcastDestino(e.target.value)}
+              >
+                <option value="TODOS">Todos os Encarregados da Escola (Geral)</option>
+                <option value="TURMA">Encarregados de uma Turma Específica</option>
+              </select>
+            </div>
+
+            {broadcastDestino === 'TURMA' && (
+              <div>
+                <label>Seleccionar Turma</label>
+                <select
+                  value={broadcastTurmaId}
+                  onChange={(e) => setBroadcastTurmaId(e.target.value)}
+                  required
+                >
+                  <option value="">Seleccione uma turma...</option>
+                  {turmas.map(t => (
+                    <option key={t.id} value={t.id}>{t.nome} - {t.classe}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginTop: '16px' }}>
+            <label>Mensagem a Disparar em Lote</label>
+            <textarea
+              rows={4}
+              value={broadcastMessage}
+              onChange={(e) => setBroadcastMessage(e.target.value)}
+              placeholder="Exemplo: Estimado(a) encarregado(a), informamos que sexta-feira haverá reunião geral com a direcção da escola às 10h. Contamos com a sua presença."
+              required
+            />
+          </div>
+
+          <div className="sms-info-box" style={{ marginTop: '16px', padding: '12px 16px', borderRadius: '8px', background: 'var(--surface-hover)', border: '1px solid var(--border-color)', fontSize: '13px', color: 'var(--text-secondary)' }}>
+            <strong style={{ color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <Icon name="info" size={16} />
+              Capacidade do Envio em Lote:
+            </strong>
+            <p style={{ margin: '6px 0 0' }}>
+              O sistema agrupa e despacha todas as mensagens num único pedido de alta velocidade para o gateway Infobip. Mesmo com 50, 100 ou mais encarregados, o envio é processado imediatamente em tempo real.
+            </p>
+          </div>
+
+          <div className="form-actions">
+            <button className="btn primary" type="submit" disabled={loading}>
+              {loading ? 'A disparar em lote...' : 'Disparar para Encarregados de Uma Só Vez'}
+            </button>
+          </div>
+        </form>
+      )}
+
       {activeTab === 'templates' && (
         <form className="form-page sms-templates-form" onSubmit={handleSaveTemplates}>
           <h3>Personalização de Modelos de SMS</h3>
           <p className="muted">
-            Configure o texto padrão das mensagens enviadas aos encarregados. Pode incluir as tags dinâmicas abaixo:
+            Configure o texto padrão das notificações enviadas aos encarregados de educação. Pode utilizar as tags automáticas:
           </p>
           <div className="tags-container">
             <code>{'{encarregado}'}</code>
@@ -857,7 +2014,7 @@ function Notifications({ refreshKey }) {
           </div>
 
           <div className="template-field" style={{ marginTop: '16px' }}>
-            <label>Modelo de SMS para Marcação de Falta (FALTA)</label>
+            <label>Modelo de Mensagem para Falta Escolar (FALTA)</label>
             <textarea
               rows={3}
               value={templates.FALTA}
@@ -867,7 +2024,7 @@ function Notifications({ refreshKey }) {
           </div>
 
           <div className="template-field" style={{ marginTop: '16px' }}>
-            <label>Modelo de SMS para Limite de Faltas (PPF)</label>
+            <label>Modelo de Mensagem para Limite de Faltas (PPF)</label>
             <textarea
               rows={3}
               value={templates.PPF}
@@ -878,53 +2035,7 @@ function Notifications({ refreshKey }) {
 
           <div className="form-actions">
             <button className="btn primary" type="submit" disabled={loading}>
-              {loading ? 'A guardar...' : 'Guardar Modelos de SMS'}
-            </button>
-          </div>
-        </form>
-      )}
-
-      {activeTab === 'test' && (
-        <form className="form-page sms-test-form" onSubmit={handleSendTestSms}>
-          <h3>Disparo de Teste de Notificação (Infobip API)</h3>
-          <p className="muted">
-            Envie uma SMS de teste em tempo real utilizando a chave de API configurada para testar o envio para um telemóvel moçambicano.
-          </p>
-
-          <div className="form-grid" style={{ gridTemplateColumns: '1fr', marginTop: '16px' }}>
-            <div>
-              <label>Número de Telemóvel do Encarregado (Moçambique)</label>
-              <input
-                type="text"
-                value={testPhone}
-                onChange={(e) => setTestPhone(e.target.value)}
-                placeholder="+258876386514"
-                required
-              />
-            </div>
-
-            <div>
-              <label>Conteúdo da Mensagem de Teste</label>
-              <textarea
-                rows={3}
-                value={testMessage}
-                onChange={(e) => setTestMessage(e.target.value)}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="sms-info-box" style={{ marginTop: '16px', padding: '12px 16px', borderRadius: '8px', background: 'var(--surface-hover)', border: '1px solid var(--border-color)', fontSize: '13px', color: 'var(--text-secondary)' }}>
-            <strong style={{ color: 'var(--text-primary)' }}>💡 Guia de Resolução de Entrega em Moçambique (+258):</strong>
-            <ul style={{ margin: '8px 0 0 16px', padding: 0 }}>
-              <li><strong>Modo de Simulação:</strong> Se o modo for <em>Simulação</em>, as SMS são registadas na base de dados mas não chegam aos telemóveis reais.</li>
-              <li><strong>Sender ID (Remetente):</strong> Operadoras como Vodacom (84/85), Movitel (86/87) e Tmcel (82/83) filtram Sender IDs não registados (ex.: <code>StudentCtrl</code>). Se o telemóvel não receber, limpe ou omitida o <code>SMS_SENDER</code> no <code>.env</code> do servidor para que a Infobip utilize o remetente numérico/padrão pré-aprovado.</li>
-            </ul>
-          </div>
-
-          <div className="form-actions">
-            <button className="btn primary" type="submit" disabled={loading}>
-              {loading ? 'A disparar SMS...' : 'Disparar SMS de Teste'}
+              {loading ? 'A guardar...' : 'Guardar Modelos de Mensagem'}
             </button>
           </div>
         </form>

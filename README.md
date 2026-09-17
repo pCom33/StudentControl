@@ -34,7 +34,7 @@ O script cria a base `studentcontrol`, as tabelas e dados iniciais.
 Conta inicial:
 
 ```text
-Email: secretaria@escola.co.mz
+Email: secretariageral279@gmail.com
 Palavra-passe: 123456
 ```
 

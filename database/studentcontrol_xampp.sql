@@ -136,6 +136,7 @@ CREATE TABLE justificacoes (
   justificado_por INT NOT NULL,
   motivo VARCHAR(255) NOT NULL,
   observacao TEXT,
+  documento_anexo VARCHAR(255) NULL,
   criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_justificacoes_presenca FOREIGN KEY (presenca_id) REFERENCES presencas(id),
   CONSTRAINT fk_justificacoes_usuario FOREIGN KEY (justificado_por) REFERENCES usuarios(id)
@@ -165,7 +166,7 @@ CREATE TABLE ppf (
 );
 
 INSERT INTO usuarios (nome, email, password_hash, perfil) VALUES
-('Secretaria Geral', 'secretaria@escola.co.mz', '$2b$10$O5ZmNqxTqxgh0LAmOwD5Z.FaE/4QUxml3sB37YXCfX.3MPCoXJoLG', 'SECRETARIA'),
+('Secretaria Geral', 'secretariageral279@gmail.com', '$2b$10$O5ZmNqxTqxgh0LAmOwD5Z.FaE/4QUxml3sB37YXCfX.3MPCoXJoLG', 'SECRETARIA'),
 ('Helena Cuinica', 'helena@escola.co.mz', '$2b$10$O5ZmNqxTqxgh0LAmOwD5Z.FaE/4QUxml3sB37YXCfX.3MPCoXJoLG', 'PROFESSOR'),
 ('Celina Mateus', 'celina@familia.co.mz', '$2b$10$O5ZmNqxTqxgh0LAmOwD5Z.FaE/4QUxml3sB37YXCfX.3MPCoXJoLG', 'ENCARREGADO');
 
